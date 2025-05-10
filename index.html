@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enviroment Data - Realtime Display</title>
+    <script src="https://code.highcharts.com/stock/highstock.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="https://www.unpkg.com/@eohjsc/era-widget@1.0.14/src/index.js"></script>
+    <style>
+      #container {
+        height: 400px;
+        min-width: 310px;
+      }
+
+      #exportButton {
+        display: inline-block;
+        padding: 10px 20px;
+        margin: 10px 0;
+        font-size: 16px;
+        color: #fff;
+        background-color: #4caf50;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      #exportButton:hover {
+        background-color: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="exportButton">Export Excel</button>
+    <div id="container"></div>
+    <script>
+      const eraWidget = new EraWidget();
+      let configTemp = null;
+      let configHumid = null;
+      let configDust = null;
+      let TempValue = 0;
+      let HumidValue = 0;
+
+      eraWidget.onConfiguration((configuration) => {
+        configTemp = configuration.realtime_configs[0];
+        configHumid = configuration.realtime_configs[1];
+      });
+
+      eraWidget.onValues((values) => {
+        TempValue = values[configTemp.id].value;
+        HumidValue = values[configHumid.id].value;
+      });
+
+      eraWidget.ready();
+
+      const dataBuffer = [];
+
+      Highcharts.stockChart("container", {
+        chart: {
+          backgroundColor: "#EBFAFF",
+          events: {
+            load: function () {
+              const seriesTemp = this.series[0];
+              const seriesHumid = this.series[1];
+
+              setInterval(function () {
+                const x = new Date().getTime();
+
+                seriesTemp.addPoint([x, TempValue], true, true);
+                seriesHumid.addPoint([x, HumidValue], true, true);
+
+                dataBuffer.push([x, TempValue, HumidValue]);
+              }, 1000);
+            },
+          },
+        },
+
+        accessibility: {
+          enabled: false,
+        },
+
+        time: {
+          useUTC: false,
+        },
+
+        title: {
+          text: "Enviroment Data - Realtime Display",
+        },
+        rangeSelector: {
+          buttons: [
+            {
+              type: "all",
+              text: "All",
+            },
+          ],
+          inputEnabled: false,
+          selected: 0,
+        },
+        exporting: {
+          enabled: false,
+        },
+
+        series: [
+          {
+            name: "Nhiệt độ",
+            data: (function () {
+              const data = [],
+                time = new Date().getTime();
+
+              for (let i = -59; i <= 0; i += 1) {
+                data.push([time + i * 1000, TempValue]);
+              }
+              return data;
+            })(),
+          },
+          {
+            name: "Độ ẩm",
+            data: (function () {
+              const data = [],
+                time = new Date().getTime();
+
+              for (let i = -59; i <= 0; i += 1) {
+                data.push([time + i * 1000, HumidValue]);
+              }
+              return data;
+            })(),
+          },
+        ],
+      });
+
+      document
+        .getElementById("exportButton")
+        .addEventListener("click", function () {
+          const ws = XLSX.utils.json_to_sheet(
+            dataBuffer.map((point) => ({
+              Time: new Date(point[0]).toLocaleString(),
+              Temperature: point[1],
+              Humidity: point[2],
+              DustDensity: point[3],
+            }))
+          );
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "EnviromentData");
+          XLSX.writeFile(wb, "EnviromentData.xlsx");
+        });
+    </script>
+  </body>
+</html>
